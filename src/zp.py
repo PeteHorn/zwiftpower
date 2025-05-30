@@ -1,8 +1,8 @@
 import argparse
-import time
 import csv
 import os
 import re
+import logging
 from datetime import datetime
 from pprint import pprint
 
@@ -10,30 +10,37 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
+
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
 def setup_driver():
     options = webdriver.FirefoxOptions()
     options.add_argument("--width=1200")
     options.add_argument("--height=800")
-    options.add_argument("--headless")  # For background execution
+    options.add_argument("--headless")
     return webdriver.Firefox(options=options)
 
 
 def login_to_zwiftpower(driver, email, password):
-    driver.get("https://zwiftpower.com/")
-    time.sleep(2)
+    try:
+        driver.get("https://zwiftpower.com/")
+        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Login with Zwift"))).click()
 
-    login_button = driver.find_element(By.LINK_TEXT, "Login with Zwift")
-    login_button.click()
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.NAME, "username")))
+        driver.find_element(By.NAME, "username").send_keys(email)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
-    WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.NAME, "username")))
-    driver.find_element(By.NAME, "username").send_keys(email)
-    driver.find_element(By.NAME, "password").send_keys(password)
-    driver.find_element(By.XPATH, "//button[@type='submit']").click()
+        WebDriverWait(driver, 30).until(EC.url_contains("zwiftpower.com"))
+        logging.info("✅ Login successful.")
 
-    WebDriverWait(driver, 30).until(EC.url_contains("zwiftpower.com"))
+    except (TimeoutException, WebDriverException, NoSuchElementException) as e:
+        logging.error(f"❌ Login failed: {e}")
+        raise
 
 
 def scrape_profile_data(driver, profile_url):
@@ -47,6 +54,8 @@ def scrape_profile_data(driver, profile_url):
         "date": datetime.now().strftime("%Y-%m-%d"),
         "weight": None,
         "zftp": None,
+        "zftp_wkg": None,
+        "racing_score": None,
         "15s_w": None, "1m_w": None, "5m_w": None, "20m_w": None,
         "15s_wkg": None, "1m_wkg": None, "5m_wkg": None, "20m_wkg": None,
     }
@@ -61,6 +70,22 @@ def scrape_profile_data(driver, profile_url):
                 data["zftp"] = value
             elif "weight" in label:
                 data["weight"] = value
+                data["weight"] = re.sub(r"[^\d.]", "", data["weight"])
+            elif "racing score" in label:
+                data["racing_score"] = re.search(r"\d+", value).group()
+
+
+        # Strip "w" from zftp
+        if data["zftp"] and data["zftp"].lower().endswith("w"):
+            data["zftp"] = re.sub(r"[^\d.]", "", data["zftp"])
+
+        # Calculate zftp_wkg
+        try:
+            zftp_float = float(data["zftp"])
+            weight_float = float(data["weight"])
+            data["zftp_wkg"] = round(zftp_float / weight_float, 2)
+        except (ValueError, TypeError, ZeroDivisionError):
+            data["zftp_wkg"] = None
 
         source = driver.page_source
         watts = extract_power(source, "w")
@@ -73,40 +98,46 @@ def scrape_profile_data(driver, profile_url):
         return data
 
     except Exception as e:
-        print("Error extracting data:", e)
+        logging.error(f"❌ Error extracting data: {e}")
         return data
 
 
 def extract_power(source, category: str):
-    matches = re.findall(r"<b>(15 seconds|1 minute|5 minutes|20 minutes)</b>: ([\d\.]+)\s*<rsmall>" + category, source)
+    pattern = (
+        r"<b>\s*(15\s*seconds|1\s*minute|5\s*minutes|20\s*minutes)\s*</b>:\s*"
+        r"([\d\.]+)\s*<rsmall>" + re.escape(category)
+    )
+    matches = re.findall(pattern, source, re.IGNORECASE)
     power_dict = {}
-    for label, power in matches:
-        if label.startswith("15"):
-            power_dict["15s"] = power
-        elif label.startswith("1 "):
-            power_dict["1m"] = power
-        elif label.startswith("5"):
-            power_dict["5m"] = power
-        elif label.startswith("20"):
-            power_dict["20m"] = power
+    for label, value in matches:
+        label = label.lower()
+        if "15" in label:
+            power_dict["15s"] = value
+        elif "1" in label:
+            power_dict["1m"] = value
+        elif "5" in label:
+            power_dict["5m"] = value
+        elif "20" in label:
+            power_dict["20m"] = value
     return power_dict
 
 
 def write_to_csv(filepath, data):
     header = [
-        "date", "weight", "zftp",
-        "15s_w", "1m_w", "5m_w", "20m_w",
-        "15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"
-    ]
+    "date", "weight", "zftp", "zftp_wkg", "racing_score",
+    "15s_w", "1m_w", "5m_w", "20m_w",
+    "15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"
+]
+
 
     file_exists = os.path.isfile(filepath)
-
     with open(filepath, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=header)
-
         if not file_exists:
             writer.writeheader()
         writer.writerow(data)
+
+    logging.info(f"📁 Data written to {filepath}")
 
 
 def main():
@@ -124,11 +155,12 @@ def main():
         login_to_zwiftpower(driver, args.email, args.password)
         data = scrape_profile_data(driver, args.url)
         write_to_csv(args.csv, data)
-        print(f"\n✅ Data written to {args.csv}\n")
-        print("📊 Scraped Profile Data:")
+
+        logging.info("📊 Scraped Profile Data:")
         pprint(data, sort_dicts=False)
     finally:
         driver.quit()
+        logging.info("🛑 Browser closed.")
 
 
 if __name__ == "__main__":
