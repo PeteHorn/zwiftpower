@@ -5,6 +5,8 @@ import re
 import logging
 from datetime import datetime
 from pprint import pprint
+from openpyxl import Workbook, load_workbook
+from openpyxl.utils import get_column_letter
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -12,6 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
+from file_writer import csv_writer, xlsx_writer
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -122,30 +125,14 @@ def extract_power(source, category: str):
     return power_dict
 
 
-def write_to_csv(filepath, data):
-    header = [
-    "date", "weight", "zftp", "zftp_wkg", "racing_score",
-    "15s_w", "1m_w", "5m_w", "20m_w",
-    "15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"
-]
-
-
-    file_exists = os.path.isfile(filepath)
-    with open(filepath, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=header)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(data)
-
-    logging.info(f"📁 Data written to {filepath}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="ZwiftPower Scraper with CSV logging and formatted output")
     parser.add_argument("--email", required=True, help="Zwift account email")
     parser.add_argument("--password", required=True, help="Zwift account password")
     parser.add_argument("--url", required=True, help="ZwiftPower profile URL")
-    parser.add_argument("--csv", required=True, help="Path to CSV output file")
+    parser.add_argument("--folder", required=True, help="Path to output folder")
+    parser.add_argument("--filename", required=True, help="Name for the output file")
+    parser.add_argument("--extension", default="xlsx", help="File extension, can be csv or xlsx - defaults to xlsx")
 
     args = parser.parse_args()
 
@@ -154,7 +141,12 @@ def main():
     try:
         login_to_zwiftpower(driver, args.email, args.password)
         data = scrape_profile_data(driver, args.url)
-        write_to_csv(args.csv, data)
+        filepath = args.folder + "/" + args.filename + "." + args.extension
+        if args.extension == "csv":
+            filewriter = csv_writer(filepath)
+        else:
+            filewriter = xlsx_writer(filepath)
+        filewriter.write(data)
 
         logging.info("📊 Scraped Profile Data:")
         pprint(data, sort_dicts=False)
