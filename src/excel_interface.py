@@ -34,6 +34,39 @@ class xlsx_report(report):
         for i, val in enumerate(values, start=2):
             self.data_ws.cell(row=i, column=col, value=val)
         self.column_index += 1
+        self.row_count = self.data_ws.max_row
+    
+    def add_chart(self, name:str, columns:list):
+        # Create chart
+        chart = LineChart()
+        chart.title = name
+
+        # X values (no header)
+        cats = Reference(
+            self.data_ws, 
+            min_col=1, 
+            min_row=2, 
+            max_row=self.row_count)
+        
+        for column in columns:
+            # Y values (with header for title)
+            data_ref = Reference(
+                self.data_ws, 
+                min_col=column, 
+                min_row=1, 
+                max_row=self.row_count
+                )
+    
+            # Add data to chart
+            chart.add_data(data_ref, titles_from_data=True)
+        chart.set_categories(cats)
+        
+        chart.width = 32
+        chart.height = 12
+
+        # Create a new sheet for the chart
+        chart_ws = self.wb.create_sheet(title=name)
+        chart_ws.add_chart(chart, "A1")
         
     def save_file(self, path):
         self.wb.save(path)

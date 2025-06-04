@@ -14,7 +14,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
-from file_writer import csv_writer, xlsx_writer
+from file_writer import write as f_write
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -26,7 +26,6 @@ def setup_driver():
     options.add_argument("--height=800")
     options.add_argument("--headless")
     return webdriver.Firefox(options=options)
-
 
 def login_to_zwiftpower(driver, email, password):
     try:
@@ -44,7 +43,6 @@ def login_to_zwiftpower(driver, email, password):
     except (TimeoutException, WebDriverException, NoSuchElementException) as e:
         logging.error(f"❌ Login failed: {e}")
         raise
-
 
 def scrape_profile_data(driver, profile_url):
     driver.get(profile_url)
@@ -104,7 +102,6 @@ def scrape_profile_data(driver, profile_url):
         logging.error(f"❌ Error extracting data: {e}")
         return data
 
-
 def extract_power(source, category: str):
     pattern = (
         r"<b>\s*(15\s*seconds|1\s*minute|5\s*minutes|20\s*minutes)\s*</b>:\s*"
@@ -124,6 +121,8 @@ def extract_power(source, category: str):
             power_dict["20m"] = value
     return power_dict
 
+def create_report():
+    pass
 
 def main():
     parser = argparse.ArgumentParser(description="ZwiftPower Scraper with CSV logging and formatted output")
@@ -132,7 +131,6 @@ def main():
     parser.add_argument("--url", required=True, help="ZwiftPower profile URL")
     parser.add_argument("--folder", required=True, help="Path to output folder")
     parser.add_argument("--filename", required=True, help="Name for the output file")
-    parser.add_argument("--extension", default="xlsx", help="File extension, can be csv or xlsx - defaults to xlsx")
 
     args = parser.parse_args()
 
@@ -141,12 +139,8 @@ def main():
     try:
         login_to_zwiftpower(driver, args.email, args.password)
         data = scrape_profile_data(driver, args.url)
-        filepath = args.folder + "/" + args.filename + "." + args.extension
-        if args.extension == "csv":
-            filewriter = csv_writer(filepath)
-        else:
-            filewriter = xlsx_writer(filepath)
-        filewriter.write(data)
+        filepath = args.folder + "/" + args.filename + ".csv"
+        f_write(filepath, data)
 
         logging.info("📊 Scraped Profile Data:")
         pprint(data, sort_dicts=False)
