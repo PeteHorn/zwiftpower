@@ -1,6 +1,8 @@
 from openpyxl import Workbook, workbook, worksheet
 from openpyxl.chart import LineChart, Reference
 
+import logging
+
 class report:
     def __init__(self):
         pass
@@ -32,7 +34,10 @@ class xlsx_report(report):
         col = self.column_index
         self.data_ws.cell(row=1, column=col, value=header)
         for i, val in enumerate(values, start=2):
-            self.data_ws.cell(row=i, column=col, value=val)
+            if col == 1:
+                self.data_ws.cell(row=i, column=col, value=val)
+            else:
+                self.data_ws.cell(row=i, column=col, value=float(val))
         self.column_index += 1
         self.row_count = self.data_ws.max_row
     
@@ -56,7 +61,7 @@ class xlsx_report(report):
                 min_row=1, 
                 max_row=self.row_count
                 )
-    
+            logging.info(data_ref)
             # Add data to chart
             chart.add_data(data_ref, titles_from_data=True)
         chart.set_categories(cats)

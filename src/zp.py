@@ -5,6 +5,8 @@ import re
 import logging
 from datetime import datetime
 from pprint import pprint
+from collections import defaultdict
+
 from openpyxl import Workbook, load_workbook
 from openpyxl.utils import get_column_letter
 
@@ -15,6 +17,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
 from file_writer import write as f_write
+from excel_interface import xlsx_report
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -121,8 +124,33 @@ def extract_power(source, category: str):
             power_dict["20m"] = value
     return power_dict
 
-def create_report():
-    pass
+def get_historical_data(filepath):
+    column_data = defaultdict(list)
+
+    with open(filepath, mode='r', newline='') as file:
+        reader = csv.DictReader(file)
+        for row in reader:
+            for key, value in row.items():
+                column_data[key].append(value)
+    
+    # Convert defaultdict to regular dict (optional)
+    column_data = dict(column_data)
+    return column_data
+
+def create_report(history, filename):
+    if os.path.exists(filename):
+        os.remove(filename)
+        logging.info(f"Old version of {filename} exists - deleted")
+    xlsx_rp = xlsx_report()
+    logging.info(len(history.items()))
+    for key, value in history.items():
+        xlsx_rp.add_data(key, value)
+    xlsx_rp.add_chart("Watts", [3, 6, 7, 8, 9])
+    xlsx_rp.add_chart("WKG", [4, 10, 11, 12, 13])
+    xlsx_rp.save_file(filename)
+    xlsx_rp.add_chart("Racing Score", [5])
+    xlsx_rp.save_file(filename)
+    logging.info(f'Report created at {filename}')
 
 def main():
     parser = argparse.ArgumentParser(description="ZwiftPower Scraper with CSV logging and formatted output")
@@ -139,9 +167,10 @@ def main():
     try:
         login_to_zwiftpower(driver, args.email, args.password)
         data = scrape_profile_data(driver, args.url)
-        filepath = args.folder + "/" + args.filename + ".csv"
-        f_write(filepath, data)
-
+        filepath = args.folder + "/" + args.filename
+        f_write(filepath + ".csv", data)
+        history = get_historical_data(filepath + ".csv")
+        create_report(history, filepath + ".xlsx")
         logging.info("📊 Scraped Profile Data:")
         pprint(data, sort_dicts=False)
     finally:
