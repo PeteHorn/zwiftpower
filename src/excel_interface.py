@@ -1,7 +1,15 @@
 from openpyxl import Workbook, workbook, worksheet
 from openpyxl.chart import LineChart, Reference
+from openpyxl.chart.axis import DateAxis
 
+from datetime import datetime
 import logging
+
+colors = ["FF0000",  # Red
+          "00B050",  # Green
+          "0070C0",  # Blue
+          "7030A0",  # Purple
+          "FFC000"]  # Orange
 
 class report:
     def __init__(self):
@@ -33,7 +41,11 @@ class xlsx_report(report):
         col = self.column_index
         self.data_ws.cell(row=1, column=col, value=header)
         for i, val in enumerate(values, start=2):
-            self.data_ws.cell(row=i, column=col, value=val if col == 1 else float(val))
+            if col == 1:
+                fmt_val = datetime.strptime(val, "%Y-%m-%d")
+            else:
+                fmt_val = float(val)
+            self.data_ws.cell(row=i, column=col, value=fmt_val)
         self.column_index += 1
         self.row_count = self.data_ws.max_row
     
@@ -59,11 +71,19 @@ class xlsx_report(report):
                 )
             # Add data to chart
             chart.add_data(data_ref, titles_from_data=True)
+        for i, s in enumerate(chart.series):
+            s.graphicalProperties.line.noFill = True  # Remove the line
+            s.marker.symbol = "circle"               # Set marker symbol
+            s.marker.size = 7                        # Optional: marker size
+            color = colors[i % len(colors)]
+            s.marker.graphicalProperties.solidFill = color         # Marker color
+            s.graphicalProperties.solidFill = color                # Legend marker color
         chart.set_categories(cats)
-        
+        chart.x_axis = DateAxis(crossAx=100)
+        chart.x_axis.number_format = 'yyyy-mm-dd'
+        chart.x_axis.majorTimeUnit = "days"
         chart.width = 32
         chart.height = 12
-
         # Create a new sheet for the chart
         chart_ws = self.wb.create_sheet(title=name)
         chart_ws.add_chart(chart, "A1")

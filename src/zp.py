@@ -19,6 +19,10 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException,
 from file_writer import write as f_write
 from excel_interface import xlsx_report
 
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -152,6 +156,32 @@ def create_report(history, filename):
     xlsx_rp.save_file(filename)
     logging.info(f'Report created at {filename}')
 
+def build_history(email, password, url, filepath):
+    driver = setup_driver()
+    try:
+        login_to_zwiftpower(driver, email, password)
+        data = scrape_profile_data(driver, url)
+        pprint(data, sort_dicts=False)
+        f_write(filepath, data)
+        history = get_historical_data(filepath)
+    finally:
+        driver.quit()
+        logging.info("🛑 Browser closed.")
+    return history
+
+def plot_graph(filepath):
+    df = pd.read_csv(filepath, parse_dates=['date'])
+    os.makedirs('graphs', exist_ok=True)
+    plt.figure()
+    plt.plot(df['date'], df['zftp'], marker='o')
+    plt.title('zFTP')
+    plt.xlabel('Date')
+    plt.ylabel('zFTP')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig('graphs/zftp_wkg.png')
+    plt.close()
+
 def main():
     parser = argparse.ArgumentParser(description="ZwiftPower Scraper with CSV logging and formatted output")
     parser.add_argument("--email", required=True, help="Zwift account email")
@@ -162,20 +192,12 @@ def main():
 
     args = parser.parse_args()
 
-    driver = setup_driver()
-
-    try:
-        login_to_zwiftpower(driver, args.email, args.password)
-        data = scrape_profile_data(driver, args.url)
-        filepath = args.folder + "/" + args.filename
-        f_write(filepath + ".csv", data)
-        history = get_historical_data(filepath + ".csv")
-        create_report(history, filepath + ".xlsx")
-        logging.info("📊 Scraped Profile Data:")
-        pprint(data, sort_dicts=False)
-    finally:
-        driver.quit()
-        logging.info("🛑 Browser closed.")
+    filepath = args.folder + "/" + args.filename
+    history = build_history(args.email, args.password, args.url, filepath + ".csv")
+    plot_graph(filepath + ".csv")
+    create_report(history, filepath + ".xlsx")
+    logging.info("📊 Scraped Profile Data:")
+    
 
 
 if __name__ == "__main__":
