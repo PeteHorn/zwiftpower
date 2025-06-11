@@ -21,7 +21,8 @@ from excel_interface import xlsx_report
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import os
+from matplotlib.ticker import MaxNLocator
+import matplotlib.dates as mdates
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -169,17 +170,24 @@ def build_history(email, password, url, filepath):
         logging.info("🛑 Browser closed.")
     return history
 
-def plot_graph(filepath):
+def plot_graph(filepath, title: str, fields:list):
     df = pd.read_csv(filepath, parse_dates=['date'])
     os.makedirs('graphs', exist_ok=True)
-    plt.figure()
-    plt.plot(df['date'], df['zftp'], marker='o')
-    plt.title('zFTP')
+    plt.figure(figsize=(12, 6)) 
+    for f in fields:
+        plt.plot(df['date'], df[f], marker='o')
+    plt.title(title)
     plt.xlabel('Date')
-    plt.ylabel('zFTP')
+    plt.ylabel(title)
     plt.grid(True)
     plt.tight_layout()
-    plt.savefig('graphs/zftp_wkg.png')
+    if len(fields) > 1:
+        plt.legend(fields)
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=10))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    plt.xticks(rotation=20)
+    plt.savefig(f'graphs/{title}.png', dpi=300)
     plt.close()
 
 def main():
@@ -194,7 +202,31 @@ def main():
 
     filepath = args.folder + "/" + args.filename
     history = build_history(args.email, args.password, args.url, filepath + ".csv")
-    plot_graph(filepath + ".csv")
+    plot_graph(
+        filepath = filepath + ".csv",
+        title = "zFTP_wkg",
+        fields = ["zftp_wkg"]
+        )
+    plot_graph(
+        filepath = filepath + ".csv",
+        title = "zFTP_watts",
+        fields = ["zftp"]
+        )
+    plot_graph(
+        filepath = filepath + ".csv",
+        title = "Racing_Score",
+        fields = ["racing_score"]
+        )
+    plot_graph(
+        filepath = filepath + ".csv",
+        title = "Power_watts", 
+        fields = ["15s_w", "1m_w", "5m_w", "20m_w"]
+        )
+    plot_graph(
+        filepath = filepath + ".csv",
+        title = "Power_WKG", 
+        fields = ["15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"]
+        )
     create_report(history, filepath + ".xlsx")
     logging.info("📊 Scraped Profile Data:")
     
