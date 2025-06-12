@@ -7,9 +7,6 @@ from datetime import datetime
 from pprint import pprint
 from collections import defaultdict
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.utils import get_column_letter
-
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -17,23 +14,31 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
 from file_writer import write as f_write
-from excel_interface import xlsx_report
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MaxNLocator
 import matplotlib.dates as mdates
 
 # Logging configuration
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
-def setup_driver():
-    options = webdriver.FirefoxOptions()
+def setup_driver(driver:str):
+    logging.info(f'Selected driver is {driver}')
+    if driver == "Firefox":
+        options = webdriver.FirefoxOptions()
+    elif driver == "Chrome":
+        options = webdriver.ChromeOptions()
+    else:
+        raise Exception("Invalid Driver")
     options.add_argument("--width=1200")
     options.add_argument("--height=800")
     options.add_argument("--headless")
-    return webdriver.Firefox(options=options)
+    if driver == "firefox":
+        return webdriver.Firefox(options=options)
+    else:
+        options.binary_location = "/usr/lib/chromium/chromium"
+        return webdriver.Chrome(options=options)
 
 def login_to_zwiftpower(driver, email, password):
     try:
@@ -157,8 +162,8 @@ def create_report(history, filename):
     xlsx_rp.save_file(filename)
     logging.info(f'Report created at {filename}')
 
-def build_history(email, password, url, filepath):
-    driver = setup_driver()
+def build_history(driver, email, password, url, filepath):
+    driver = setup_driver(driver)
     try:
         login_to_zwiftpower(driver, email, password)
         data = scrape_profile_data(driver, url)
@@ -170,9 +175,8 @@ def build_history(email, password, url, filepath):
         logging.info("🛑 Browser closed.")
     return history
 
-def plot_graph(filepath, title: str, fields:list):
-    df = pd.read_csv(filepath, parse_dates=['date'])
-    os.makedirs('graphs', exist_ok=True)
+def plot_graph(src_file: str, dest_folder:str, title: str, fields:list):
+    df = pd.read_csv(src_file, parse_dates=['date'])
     plt.figure(figsize=(12, 6)) 
     for f in fields:
         plt.plot(df['date'], df[f], marker='o')
@@ -187,7 +191,10 @@ def plot_graph(filepath, title: str, fields:list):
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(maxticks=10))
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     plt.xticks(rotation=20)
-    plt.savefig(f'graphs/{title}.png', dpi=300)
+    if not os.path.exists(dest_folder):
+        os.makedirs(dest_folder)
+        logging.info(f'Created folders {dest_folder}')
+    plt.savefig(f'{dest_folder}/{title}.png', dpi=300)
     plt.close()
 
 def main():
@@ -197,37 +204,43 @@ def main():
     parser.add_argument("--url", required=True, help="ZwiftPower profile URL")
     parser.add_argument("--folder", required=True, help="Path to output folder")
     parser.add_argument("--filename", required=True, help="Name for the output file")
+    parser.add_argument("--destination", required=True, help="Destination folder to store png files in")
+    parser.add_argument("--driver", default="Firefox", help="Determines the driver to use for the web browser")
 
     args = parser.parse_args()
 
     filepath = args.folder + "/" + args.filename
-    history = build_history(args.email, args.password, args.url, filepath + ".csv")
+    history = build_history(args.driver, args.email, args.password, args.url, filepath + ".csv")
     plot_graph(
-        filepath = filepath + ".csv",
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
         title = "zFTP_wkg",
         fields = ["zftp_wkg"]
         )
     plot_graph(
-        filepath = filepath + ".csv",
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
         title = "zFTP_watts",
         fields = ["zftp"]
         )
     plot_graph(
-        filepath = filepath + ".csv",
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
         title = "Racing_Score",
         fields = ["racing_score"]
         )
     plot_graph(
-        filepath = filepath + ".csv",
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
         title = "Power_watts", 
         fields = ["15s_w", "1m_w", "5m_w", "20m_w"]
         )
     plot_graph(
-        filepath = filepath + ".csv",
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
         title = "Power_WKG", 
         fields = ["15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"]
         )
-    create_report(history, filepath + ".xlsx")
     logging.info("📊 Scraped Profile Data:")
     
 
