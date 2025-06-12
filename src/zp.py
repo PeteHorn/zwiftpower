@@ -34,7 +34,7 @@ def setup_driver(driver:str):
     options.add_argument("--width=1200")
     options.add_argument("--height=800")
     options.add_argument("--headless")
-    if driver == "firefox":
+    if driver == "Firefox":
         return webdriver.Firefox(options=options)
     else:
         options.binary_location = "/usr/lib/chromium/chromium"
