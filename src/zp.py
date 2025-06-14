@@ -14,6 +14,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException, TimeoutException, WebDriverException
 
 from file_writer import write as f_write
+from zr import find_velo_score
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -23,22 +24,12 @@ import matplotlib.dates as mdates
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 
-def setup_driver(driver:str):
-    logging.info(f'Selected driver is {driver}')
-    if driver == "Firefox":
-        options = webdriver.FirefoxOptions()
-    elif driver == "Chrome":
-        options = webdriver.ChromeOptions()
-    else:
-        raise Exception("Invalid Driver")
+def setup_driver():
+    options = webdriver.FirefoxOptions()
     options.add_argument("--width=1200")
     options.add_argument("--height=800")
     options.add_argument("--headless")
-    if driver == "Firefox":
-        return webdriver.Firefox(options=options)
-    else:
-        options.binary_location = "/usr/lib/chromium/chromium"
-        return webdriver.Chrome(options=options)
+    return webdriver.Firefox(options=options)
 
 def login_to_zwiftpower(driver, email, password):
     try:
@@ -72,6 +63,7 @@ def scrape_profile_data(driver, profile_url):
         "racing_score": None,
         "15s_w": None, "1m_w": None, "5m_w": None, "20m_w": None,
         "15s_wkg": None, "1m_wkg": None, "5m_wkg": None, "20m_wkg": None,
+        'overall': None, 'flat': None, 'rolling': None, 'hilly': None, 'mountainous': None
     }
 
     try:
@@ -162,11 +154,13 @@ def create_report(history, filename):
     xlsx_rp.save_file(filename)
     logging.info(f'Report created at {filename}')
 
-def build_history(driver, email, password, url, filepath):
-    driver = setup_driver(driver)
+def build_history(email, password, url, filepath):
+    driver = setup_driver()
     try:
         login_to_zwiftpower(driver, email, password)
-        data = scrape_profile_data(driver, url)
+        zp_data = scrape_profile_data(driver, url)
+        zr_data = find_velo_score(('https://www.zwiftracing.app/riders/2882571'))
+        data = zp_data | zr_data
         pprint(data, sort_dicts=False)
         f_write(filepath, data)
         history = get_historical_data(filepath)
@@ -205,12 +199,10 @@ def main():
     parser.add_argument("--folder", required=True, help="Path to output folder")
     parser.add_argument("--filename", required=True, help="Name for the output file")
     parser.add_argument("--destination", required=True, help="Destination folder to store png files in")
-    parser.add_argument("--driver", default="Firefox", help="Determines the driver to use for the web browser")
-
     args = parser.parse_args()
 
     filepath = args.folder + "/" + args.filename
-    history = build_history(args.driver, args.email, args.password, args.url, filepath + ".csv")
+    history = build_history(args.email, args.password, args.url, filepath + ".csv")
     plot_graph(
         src_file = filepath + ".csv",
         dest_folder = args.destination,

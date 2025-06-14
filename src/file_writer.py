@@ -16,7 +16,12 @@ def write(path, data):
         "15s_wkg", 
         "1m_wkg", 
         "5m_wkg", 
-        "20m_wkg"
+        "20m_wkg", 
+        "overall",
+        "flat",
+        "rolling",
+        "hilly",
+        "mountainous"
     ]
 
     path = Path(path)
