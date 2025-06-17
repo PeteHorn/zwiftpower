@@ -233,6 +233,12 @@ def main():
         title = "Power_WKG", 
         fields = ["15s_wkg", "1m_wkg", "5m_wkg", "20m_wkg"]
         )
+    plot_graph(
+        src_file = filepath + ".csv",
+        dest_folder = args.destination,
+        title = "Velo_Score", 
+        fields = ["overall", "flat", "rolling", "hilly", "mountainous"]
+        )
     logging.info("📊 Scraped Profile Data:")
     
 
