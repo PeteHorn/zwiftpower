@@ -139,21 +139,6 @@ def get_historical_data(filepath):
     column_data = dict(column_data)
     return column_data
 
-def create_report(history, filename):
-    if os.path.exists(filename):
-        os.remove(filename)
-        logging.info(f"Old version of {filename} exists - deleted")
-    xlsx_rp = xlsx_report()
-    logging.info(len(history.items()))
-    for key, value in history.items():
-        xlsx_rp.add_data(key, value)
-    xlsx_rp.add_chart("Watts", [3, 6, 7, 8, 9])
-    xlsx_rp.add_chart("WKG", [4, 10, 11, 12, 13])
-    xlsx_rp.save_file(filename)
-    xlsx_rp.add_chart("Racing Score", [5])
-    xlsx_rp.save_file(filename)
-    logging.info(f'Report created at {filename}')
-
 def build_history(email, password, url, filepath):
     driver = setup_driver()
     try:
