@@ -7,3 +7,11 @@ python3 src/zp.py --email "xxx@gmail.com" --password xxxxxxxx --url "https://zwi
 ```
 
 Still working on improving the code base
+
+To set up the http service
+
+```
+sudo cp ~/httpserver.service /etc/systemd/system/
+sudo systemctl daemon-reexec
+sudo systemctl enable --now httpserver.service
+```
