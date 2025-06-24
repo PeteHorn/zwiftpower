@@ -1,0 +1,11 @@
+[Unit]
+Description=Zwift Power Data Python HTTP Server
+After=network.target
+
+[Service]
+WorkingDirectory=/home/pete/Documents/testdata
+ExecStart=/usr/bin/python3 -m http.server 8000
+Restart=always
+
+[Install]
+WantedBy=default.target
