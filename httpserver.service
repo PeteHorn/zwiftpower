@@ -3,7 +3,7 @@ Description=Zwift Power Data Python HTTP Server
 After=network.target
 
 [Service]
-WorkingDirectory=/home/pete/Documents/testdata
+WorkingDirectory=/home/pete/Documents/testdata/graphs
 ExecStart=/usr/bin/python3 -m http.server 8000
 Restart=always
 
