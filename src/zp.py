@@ -3,6 +3,7 @@ import csv
 import os
 import re
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 from pprint import pprint
 from collections import defaultdict
@@ -20,9 +21,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 
-# Logging configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-
 
 def setup_driver():
     options = webdriver.FirefoxOptions()
@@ -31,7 +29,7 @@ def setup_driver():
     options.add_argument("--headless")
     return webdriver.Firefox(options=options)
 
-def login_to_zwiftpower(driver, email, password):
+def login_to_zwiftpower(driver, email, password, logger):
     try:
         driver.get("https://zwiftpower.com/")
         WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.LINK_TEXT, "Login with Zwift"))).click()
@@ -42,13 +40,13 @@ def login_to_zwiftpower(driver, email, password):
         driver.find_element(By.XPATH, "//button[@type='submit']").click()
 
         WebDriverWait(driver, 30).until(EC.url_contains("zwiftpower.com"))
-        logging.info("✅ Login successful.")
+        logger.info("✅ Login successful.")
 
     except (TimeoutException, WebDriverException, NoSuchElementException) as e:
-        logging.error(f"❌ Login failed: {e}")
+        logger.error(f"❌ Login failed: {e}")
         raise
 
-def scrape_profile_data(driver, profile_url):
+def scrape_profile_data(driver, profile_url, logger):
     driver.get(profile_url)
 
     WebDriverWait(driver, 20).until(
@@ -104,7 +102,7 @@ def scrape_profile_data(driver, profile_url):
         return data
 
     except Exception as e:
-        logging.error(f"❌ Error extracting data: {e}")
+        logger.error(f"❌ Error extracting data: {e}")
         return data
 
 def extract_power(source, category: str):
@@ -139,19 +137,19 @@ def get_historical_data(filepath):
     column_data = dict(column_data)
     return column_data
 
-def build_history(email, password, url, filepath):
+def build_history(email, password, url, filepath, logger):
     driver = setup_driver()
     try:
-        login_to_zwiftpower(driver, email, password)
-        zp_data = scrape_profile_data(driver, url)
+        login_to_zwiftpower(driver, email, password, logger)
+        zp_data = scrape_profile_data(driver, url, logger)
         zr_data = find_velo_score(('https://www.zwiftracing.app/riders/2882571'))
         data = zp_data | zr_data
         pprint(data, sort_dicts=False)
-        f_write(filepath, data)
+        f_write(filepath, data, logger)
         history = get_historical_data(filepath)
     finally:
         driver.quit()
-        logging.info("🛑 Browser closed.")
+        logger.info("🛑 Browser closed.")
     return history
 
 def plot_graph(src_file: str, dest_folder:str, title: str, fields:list):
@@ -172,9 +170,35 @@ def plot_graph(src_file: str, dest_folder:str, title: str, fields:list):
     plt.xticks(rotation=20)
     if not os.path.exists(dest_folder):
         os.makedirs(dest_folder)
-        logging.info(f'Created folders {dest_folder}')
+        logger.info(f'Created folders {dest_folder}')
     plt.savefig(f'{dest_folder}/{title}.png', dpi=300)
     plt.close()
+    
+def config_logger(log:str):
+    logger = logging.getLogger("weekly_logger")
+    logger.setLevel(logging.DEBUG)
+
+    # Set up a TimedRotatingFileHandler to rotate logs daily and keep 7 days of logs
+    handler = TimedRotatingFileHandler(
+    filename=log,
+    when="midnight",         # Rotate at midnight
+    interval=1,              # Every day
+    backupCount=7,           # Keep 7 days' worth of logs
+    encoding="utf-8"
+    )
+    formatter = logging.Formatter(
+    fmt="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    # Optional: also log to console
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    return logger
 
 def main():
     parser = argparse.ArgumentParser(description="ZwiftPower Scraper with CSV logging and formatted output")
@@ -184,10 +208,19 @@ def main():
     parser.add_argument("--folder", required=True, help="Path to output folder")
     parser.add_argument("--filename", required=True, help="Name for the output file")
     parser.add_argument("--destination", required=True, help="Destination folder to store png files in")
+    parser.add_argument("--log", required=True, help="Path to create log files")
     args = parser.parse_args()
-
+    os.makedirs(os.path.dirname(args.log), exist_ok=True)
+    
+    logger = config_logger(args.log)
+    
     filepath = args.folder + "/" + args.filename
-    history = build_history(args.email, args.password, args.url, filepath + ".csv")
+    history = build_history(
+        args.email, 
+        args.password, 
+        args.url, 
+        filepath + ".csv",
+        logger)
     plot_graph(
         src_file = filepath + ".csv",
         dest_folder = args.destination,
@@ -224,7 +257,7 @@ def main():
         title = "Velo_Score", 
         fields = ["overall", "flat", "rolling", "hilly", "mountainous"]
         )
-    logging.info("📊 Scraped Profile Data:")
+    logger.info("📊 Scraped Profile Data:")
     
 
 

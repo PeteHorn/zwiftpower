@@ -2,7 +2,7 @@ import csv
 import logging
 from pathlib import Path
  
-def write(path, data):
+def write(path, data, logger):
     header = [
         "date", 
         "weight", 
@@ -37,7 +37,7 @@ def write(path, data):
 
     # Skip writing if date already exists
     if data["date"] in existing_dates:
-        logging.info(f"⚠️ Duplicate date '{data['date']}' found. Skipping write.")
+        logger.info(f"⚠️ Duplicate date '{data['date']}' found. Skipping write.")
         return
 
     # Validate fields
@@ -53,4 +53,4 @@ def write(path, data):
             writer.writeheader()
         writer.writerow(data)
 
-    logging.info(f"📁 Data written to {path}")
+    logger.info(f"📁 Data written to {path}")
